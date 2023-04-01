@@ -1,0 +1,37 @@
+#!/bin/sh
+NAME="s6-build"
+EXEC="sh"
+
+## check docker running.
+docker_state=$(docker info >/dev/null 2>&1)
+while [ $? -ne 0 ]
+do
+    echo "Docker does not seem to be running, sleep 2.."
+    sleep 2
+done
+
+[ "$1" = "" ] && {
+    docker build --rm -t $NAME .
+}
+
+[ "$1" = "test" ] && {
+    docker run --rm -ti --name ${NAME}-test -v $PWD/work:/work $NAME sh
+}
+
+[ "$1" = "rm" ] && {
+    docker compose down
+}
+
+[ "$1" = "e" ] && {
+    if [ "$2" != "" ]; then
+        EXEC=$2
+    fi
+    docker exec -ti $NAME $EXEC
+}
+
+[ "$1" = "run" ] && {
+    docker compose down
+    docker compose up -d
+}
+
+exit 0
