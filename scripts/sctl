@@ -1,0 +1,100 @@
+#!/bin/sh
+
+BASE_DIR="/opt/s6"
+# Set the name of the service directory
+SERVICE_DIR="/opt/s6/srv"
+
+# Create the service directory if it doesn't exist
+mkdir -p "$SERVICE_DIR"
+
+# Create the start script if it doesn't exist
+if [ ! -f "$BASE_DIR/start" ]; then
+  echo "#!/bin/sh" >"$BASE_DIR/start"
+  echo "PATH=/opt/.cmd:$PATH" >>"$BASE_DIR/start"
+  echo "s6-svscan $SERVICE_DIR" >>"$BASE_DIR/start"
+
+  echo "Created start script: $BASE_DIR/start"
+  chmod +x "$BASE_DIR/start"
+fi
+
+# Create the nohup script if it doesn't exist
+if [ ! -f "$BASE_DIR/nohup" ]; then
+  echo "#!/bin/sh" >"$BASE_DIR/nohup"
+  echo "PATH=/opt/.cmd:$PATH" >>"$BASE_DIR/nohup"
+  echo "nohup s6-svscan $SERVICE_DIR > $BASE_DIR/nohup.log 2>&1 &" >>"$BASE_DIR/nohup"
+
+  echo "Created nohup script: $BASE_DIR/nohup"
+  chmod +x "$BASE_DIR/nohup"
+fi
+
+# Action functions
+action_del() {
+  echo "Remove service $1"
+  rm -rf $SERVICE_DIR/$1
+}
+
+action_add() {
+  # Check if the service name is provided as an argument
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <service> [<diy>]" >&2
+    exit 1
+  fi
+
+  # Create the service directory in /opt/s6
+  mkdir -p "$SERVICE_DIR/$1"
+  echo "Created service: $1"
+
+  if [ ! -f "$SERVICE_DIR/$1/run" ]; then
+    RUN_SCRIPT="exec tail -f /dev/null"
+    if [ "$2" != 'diy' ] && [ -f "/opt/$1/run" ]; then
+      RUN_SCRIPT="exec /opt/$1/run"
+    fi
+
+    # Create the run script in the service directory
+    echo "#!/bin/sh" >"$SERVICE_DIR/$1/run"
+    echo "PATH=/opt/.cmd:\$PATH" >>"$SERVICE_DIR/$1/run"
+    echo "$RUN_SCRIPT" >>"$SERVICE_DIR/$1/run"
+
+    chmod +x "$SERVICE_DIR/$1/run"
+    echo "Created base run script: $SERVICE_DIR/$1/run"
+  fi
+}
+
+action_down() {
+  /opt/.cmd/s6-svc -D $SERVICE_DIR/$1
+  touch $SERVICE_DIR/$1/down
+}
+
+action_stop() {
+  /opt/.cmd/s6-svc -d $SERVICE_DIR/$1
+}
+
+action_start() {
+  /opt/.cmd/s6-svc -U $SERVICE_DIR/$1
+}
+
+action_restart() {
+  /opt/.cmd/s6-svc -r $SERVICE_DIR/$1
+}
+
+if [ -z "$2" ]; then
+    echo "Usage: $0 < add | del | down | stop | start | restart > <service>" >&2
+    exit 1
+fi
+
+action=$1
+shift
+
+# Function to check if a function exists
+function_exists() {
+  type "$1" >/dev/null 2>&1
+}
+
+# Call the action function if it exists, otherwise show an error
+if function_exists "action_$action"; then
+  "action_$action" "$@"
+else
+  echo "Error: Unknown action: '$action'"
+  echo "Usage: $0 <action> <args>"
+  exit 1
+fi

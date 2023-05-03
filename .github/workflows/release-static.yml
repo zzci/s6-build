@@ -30,6 +30,7 @@ jobs:
 
           make build
           cd build/bin
+          cp -a ../../scripts/sctl .
           tar -czf ../../s6-${{ env.VERSION }}-linux-amd64.tar.gz *
           cd ../..
           sha256sum s6-${{ env.VERSION }}-linux-amd64.tar.gz > checksum.txt
